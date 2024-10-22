@@ -1,3 +1,5 @@
+
+
 // build.gradle.kts (корневой проект)
 buildscript {
     repositories {
@@ -5,6 +7,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
+
         // Используйте актуальную версию Android Gradle Plugin
         classpath("com.android.tools.build:gradle:8.0.2")
         // Используйте совместимую версию Kotlin Gradle Plugin
@@ -13,6 +16,8 @@ buildscript {
         classpath("com.google.gms:google-services:4.3.15")
     }
 }
+
+
 
 allprojects {
     repositories {

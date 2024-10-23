@@ -53,9 +53,9 @@ android {
 dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.5.0"))
     implementation("com.google.firebase:firebase-analytics")
+    implementation(libs.coil.compose)
     // Зависимости для Google Sign-In
     implementation(libs.play.services.auth) // Проверьте актуальную версию
-
     // Jetpack Compose зависимости
     implementation (libs.ui)
     implementation (libs.material3)

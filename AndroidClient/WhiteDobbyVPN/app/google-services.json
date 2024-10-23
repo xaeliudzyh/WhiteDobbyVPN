@@ -12,7 +12,20 @@
           "package_name": "com.example.whitedobby"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "667969550872-m41h6f9su1unc992k0pk18oku5or8d1h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.whitedobby",
+            "certificate_hash": "8a894cc201666aefdf8cb0283b16bb9c5fcd74d7"
+          }
+        },
+        {
+          "client_id": "667969550872-2jvp6eh7hfmvmp9q1mhq1q3lgbgakv67.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCHBQZA5aOagBSM8YKcnq0sA8tBW9axj4k"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "667969550872-2jvp6eh7hfmvmp9q1mhq1q3lgbgakv67.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "667969550872-umaeo1drkijihnq2aj3asjhv0ne0g0gt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.whitedobby"
+              }
+            }
+          ]
         }
       }
     }

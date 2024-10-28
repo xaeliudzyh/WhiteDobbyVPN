@@ -35,7 +35,7 @@ import kotlin.math.sign
 class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
-
+    private lateinit var authStateListener: FirebaseAuth.AuthStateListener
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -57,26 +57,42 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val user = auth.currentUser
-                    if(user!=null) {//если логин удался
+
+                    //  состояние для текущего пользователя
+                    var currentUserState by remember { mutableStateOf<FirebaseUser?>(auth.currentUser) }
+                    // отслеживание изменений аутентификации
+                    DisposableEffect(Unit) {
+                        authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                            currentUserState = firebaseAuth.currentUser
+                        }
+                        auth.addAuthStateListener(authStateListener)
+                        onDispose {
+                            auth.removeAuthStateListener(authStateListener)
+                        }
+                    }
+                    if(currentUserState!=null) {//если логин удался
                         val navController = rememberNavController()
                         NavHost(navController = navController, startDestination = "main")
                         {
                             composable("main") {
-                                MainScreen(user = user, onSignOut = { sign})
+                                MainScreen(
+                                    user = currentUserState!!,
+                                    onSignOut = { signOut(navController)},
+                                    onNavigateToSettings = { navController.navigate("settings")
+                                })
+                            }
+                            composable("settings") {
+                                SettingsScreen (
+                                onBack = { navController.popBackStack() })
                             }
                         }
 
-                    }
-                    if (auth.currentUser != null) {
-                        MainScreen(auth.currentUser!!)
                     } else {
                         SignInScreen(onSignIn = { signIn() })
                     }
                 }
             }
-        }
-    }
+        } }
 
     private fun signIn() {
         val signInIntent = googleSignInClient.signInIntent
@@ -100,23 +116,7 @@ class MainActivity : ComponentActivity() {
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
-                if (task.isSuccessful) {
-                    setContent {
-                        WhiteDobbyVPNTheme {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                MainScreen(
-                                    auth.currentUser!!,
-                                    onSignOut = TODO(),
-                                    onNavigateToSettings = TODO()
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    // Обработка ошибок входа
+                if (task.isSuccessful == false) {
                     task.exception?.printStackTrace()
                 }
             }
@@ -128,10 +128,6 @@ class MainActivity : ComponentActivity() {
 
         // Выход из Google Sign-In
         googleSignInClient.signOut().addOnCompleteListener(this) {
-            // Обновление UI после выхода
-            navController.navigate("main") {
-                popUpTo("main") { inclusive = true }
-            }
         }
     }
 }
@@ -157,7 +153,7 @@ fun MainScreen(user: FirebaseUser, onSignOut: () -> Unit, onNavigateToSettings:(
                 title = { Text("Основной экран") },
                 actions = {
                     // Кнопка настроек
-                    IconButton(onClick = { onNavigateToSettings }) {
+                    IconButton(onClick = { onNavigateToSettings() }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Настройки"
@@ -188,7 +184,7 @@ fun MainScreen(user: FirebaseUser, onSignOut: () -> Unit, onNavigateToSettings:(
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Email: ${user.email}")
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { onSignOut }) {
+            Button(onClick = { onSignOut() }) {
                 Text(text = "Выйти")
             }
         }
@@ -224,8 +220,8 @@ fun SettingsScreen(onBack: () -> Unit) {
         ) {
             Text(text = "Настройки VPN", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
-            // Добавьте здесь элементы настроек по вашему усмотрению
-            Text(text = "Здесь будут настройки вашего VPN.")
+            // элементы настроек
+            Text(text = "TODO()")
         }
     }
 }

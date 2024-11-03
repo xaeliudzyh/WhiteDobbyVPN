@@ -51,6 +51,13 @@ android {
 }
 
 dependencies {
+    // Firebase BoM (Bill of Materials)
+    implementation(libs.firebase.bom)
+    // Firebase Firestore
+    implementation(libs.firebase.firestore.ktx)
+    // Firebase Cloud Storage
+    implementation(libs.firebase.storage.ktx)
+
     // Firebase Cloud Messaging
     implementation ("com.google.firebase:firebase-messaging-ktx")
     // Navigation Compose
@@ -75,6 +82,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.firebase.auth.ktx)
     implementation(libs.androidx.work.testing)
+    implementation(libs.core.ktx)
+    implementation(libs.junit.junit)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

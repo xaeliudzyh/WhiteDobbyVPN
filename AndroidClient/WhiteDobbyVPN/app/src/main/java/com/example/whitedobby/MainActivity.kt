@@ -1,5 +1,11 @@
 package com.example.whitedobby
 
+
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.firestore.FirebaseFirestoreSettings
+import com.google.firebase.firestore.FieldValue
+import android.net.Uri
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import android.content.Intent
@@ -41,8 +47,12 @@ import android.Manifest
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale
+import androidx.core.content.ContextCompat.getSystemService
 
 class MainActivity : ComponentActivity() {
+    private lateinit var firestore: FirebaseFirestore
+    private lateinit var storage: FirebaseStorage
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
     private lateinit var authStateListener: FirebaseAuth.AuthStateListener
@@ -52,6 +62,18 @@ class MainActivity : ComponentActivity() {
 
         // Инициализация Firebase Auth
         auth = FirebaseAuth.getInstance()
+
+        // Инициализация Firestore
+        firestore = FirebaseFirestore.getInstance()
+
+        // Инициализация Cloud Storage
+        storage = FirebaseStorage.getInstance()
+
+        // Включение локального кэша Firestore
+        val settings = FirebaseFirestoreSettings.Builder()
+            .setPersistenceEnabled(true)
+            .build()
+        firestore.firestoreSettings = settings
 
         // Настройка Google Sign-In
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -86,11 +108,14 @@ class MainActivity : ComponentActivity() {
                         NavHost(navController = navController, startDestination = "main")
                         {
                             composable("main") {
-                                MainScreen(
-                                    user = currentUserState!!,
-                                    onSignOut = { signOut(navController)},
-                                    onNavigateToSettings = { navController.navigate("settings")
-                                })
+                                val userId = currentUserState!!.uid
+                                UserScreen(
+                                    firestore = firestore, // Передаём firestore
+                                    userId = userId,
+                                    onSignOut = { signOut(navController) },
+                                    onNavigateToSettings = { navController.navigate("settings") },
+                                    onPickImage = { pickImageFromGallery() }
+                                )
                             }
                             composable("settings") {
                                 SettingsScreen (
@@ -104,6 +129,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // Функция для сохранения данных пользователя в Firestore
+    private fun saveUserData(user: FirebaseUser) {
+        val userId = user.uid
+        val userData = mapOf(
+            "name" to user.displayName,
+            "email" to user.email,
+            "lastLogin" to FieldValue.serverTimestamp()
+        )
+
+        firestore.collection("users")
+            .document(userId)
+            .set(userData)
+            .addOnSuccessListener {
+                Log.d("Firestore", "User data successfully written!")
+            }
+            .addOnFailureListener { e ->
+                Log.w("Firestore", "Error writing user data", e)
+            }
     }
 
     private fun askNotificationPermission() {
@@ -185,9 +230,68 @@ class MainActivity : ComponentActivity() {
         val credential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential)
             .addOnCompleteListener(this) { task ->
-                if (task.isSuccessful == false) {
+                if (task.isSuccessful) {
+                    // Вход выполнен успешно -> сохраняем данные пользователя в Firestore после успешного входа
+                    auth.currentUser?.let { user ->
+                        saveUserData(user)
+                    }
+                } else {
                     task.exception?.printStackTrace()
                 }
+            }
+    }
+
+    //загружает файл в Cloud Storage
+    private fun uploadFile(uri: Uri, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
+        val storageRef = storage.reference
+        val user = auth.currentUser ?: return
+        val fileRef = storageRef.child("profile_pictures/${user.uid}")
+
+        val uploadTask = fileRef.putFile(uri)
+
+        uploadTask.addOnSuccessListener {
+            // Получение URL загруженного файла
+            fileRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                val fileUrl = downloadUri.toString()
+                onSuccess(fileUrl)
+            }.addOnFailureListener { exception ->
+                onFailure(exception)
+            }
+        }.addOnFailureListener { exception ->
+            onFailure(exception)
+        }
+    }
+
+    // функции для выбора изображения
+    private val pickImageLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            uploadFile(it, onSuccess = { fileUrl ->
+                Log.d("CloudStorage", "File uploaded successfully: $fileUrl")
+                // Обновите URL профиля пользователя в Firestore
+                updateUserProfilePicture(fileUrl)
+            }, onFailure = { exception ->
+                Log.w("CloudStorage", "File upload failed", exception)
+            })
+        }
+    }
+
+    private fun pickImageFromGallery() {
+        pickImageLauncher.launch("image/*")
+    }
+
+    private fun updateUserProfilePicture(fileUrl: String) {
+        val user = auth.currentUser ?: return
+        val userId = user.uid
+        firestore.collection("users")
+            .document(userId)
+            .update("profilePictureUrl", fileUrl)
+            .addOnSuccessListener {
+                Log.d("Firestore", "User profile picture updated")
+            }
+            .addOnFailureListener { e ->
+                Log.w("Firestore", "Error updating profile picture", e)
             }
     }
 
@@ -197,6 +301,63 @@ class MainActivity : ComponentActivity() {
 
         // Выход из Google Sign-In
         googleSignInClient.signOut().addOnCompleteListener(this) {
+        }
+    }
+}
+
+data class User(
+    val name: String? = null,
+    val email: String? = null,
+    val profilePictureUrl: String? = null
+)
+
+
+@Composable
+fun UserScreen(
+    firestore: FirebaseFirestore,
+    userId: String,
+    onSignOut: () -> Unit,
+    onNavigateToSettings: () -> Unit,
+    onPickImage: () -> Unit
+) {
+    val userState = remember { mutableStateOf<User?>(null) }
+
+    DisposableEffect(userId) {
+        val listenerRegistration = firestore.collection("users")
+            .document(userId)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.w("Firestore", "Listen failed.", e)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    val user = snapshot.toObject(User::class.java)
+                    userState.value = user
+                } else {
+                    Log.d("Firestore", "Current data: null")
+                }
+            }
+
+        onDispose {
+            listenerRegistration.remove()
+        }
+    }
+
+    userState.value?.let { user ->
+        MainScreen(
+            user = user,
+            onSignOut = onSignOut,
+            onNavigateToSettings = onNavigateToSettings,
+            onPickImage = onPickImage
+        )
+    } ?: run {
+        // Показать индикатор загрузки
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
         }
     }
 }
@@ -215,7 +376,12 @@ fun SignInScreen(onSignIn: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(user: FirebaseUser, onSignOut: () -> Unit, onNavigateToSettings:() -> Unit) {
+fun MainScreen(
+    user: User,
+    onSignOut: () -> Unit,
+    onNavigateToSettings:() -> Unit,
+    onPickImage: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -240,21 +406,25 @@ fun MainScreen(user: FirebaseUser, onSignOut: () -> Unit, onNavigateToSettings:(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (user.photoUrl != null) {
+            if (user.profilePictureUrl != null) {
                 // Отображение аватара пользователя
                 Image(
-                    painter = rememberImagePainter(user.photoUrl),
+                    painter = rememberImagePainter(user.profilePictureUrl),
                     contentDescription = "Аватар",
                     modifier = Modifier.size(100.dp)
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Добро пожаловать, ${user.displayName}!")
+            Text(text = "Добро пожаловать, ${user.name}!")
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = "Email: ${user.email}")
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { onSignOut() }) {
                 Text(text = "Выйти")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = { onPickImage() }) {
+                Text(text = "Загрузить фото профиля")
             }
         }
     }

@@ -38,6 +38,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import android.Manifest
+import android.content.Context
+import android.util.Log
 import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
@@ -56,8 +58,8 @@ class MainActivity : ComponentActivity() {
             .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-        //createNotificationChannels()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
+        createNotificationChannels()
         askNotificationPermission()
 
         setContent {
@@ -101,7 +103,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-        } }
+        }
+    }
 
     private fun askNotificationPermission() {
         // только для API  >= 33
@@ -111,7 +114,7 @@ class MainActivity : ComponentActivity() {
                     Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                // Разрешение уже предоставлено
+                // разрешение уже предоставлено
             } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
                 // если захочу как то объяснить пользователю - нахрена ему мои уведомления
             } else {
@@ -129,6 +132,34 @@ class MainActivity : ComponentActivity() {
                 "Permission isn't granted, so you can't see notifications", Toast.LENGTH_SHORT)
                 .show()
             // TODO: Inform user that that your app will not show notifications.
+        }
+    }
+
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Канал 1: Важные уведомления
+            val channel1 = NotificationChannel(
+                "important_channel",
+                "Важные Уведомления",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "для важнейших уведомлений."
+            }
+
+            // Канал 2: Обычные уведомления
+            val channel2 = NotificationChannel(
+                "normal_channel",
+                "Обычные Уведомления",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "для обычных уведомлений."
+            }
+
+            // Регистрация каналов в системе
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel1)
+            notificationManager.createNotificationChannel(channel2)
         }
     }
 

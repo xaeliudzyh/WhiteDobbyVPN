@@ -54,9 +54,11 @@ dependencies {
     // Firebase Cloud Messaging
     implementation ("com.google.firebase:firebase-messaging-ktx")
     // Navigation Compose
-    implementation ("androidx.navigation:navigation-compose:2.8.3")
-    implementation(platform("com.google.firebase:firebase-bom:33.5.0"))
+    implementation ("androidx.navigation:navigation-compose:2.8.4")
+    implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     implementation("com.google.firebase:firebase-analytics")
+
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation(libs.coil.compose)
     // Зависимости для Google Sign-In
     implementation(libs.play.services.auth) // Проверьте актуальную версию

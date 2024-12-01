@@ -14,6 +14,7 @@ firebaseAuthKtx = "23.1.0"
 material3 = "1.3.0"
 playServicesAuth = "21.2.0"
 ui = "1.7.4"
+workTesting = "2.10.0"
 
 [libraries]
 androidx-activity-compose-v172 = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
@@ -37,6 +38,7 @@ firebase-auth-ktx = { group = "com.google.firebase", name = "firebase-auth-ktx",
 material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
 ui = { module = "androidx.compose.ui:ui", version.ref = "ui" }
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "workTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

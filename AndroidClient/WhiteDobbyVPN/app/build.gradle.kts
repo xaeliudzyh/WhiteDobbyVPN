@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.whitedobby"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.whitedobby"
@@ -65,10 +65,16 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
     implementation("com.google.firebase:firebase-analytics")
 
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
+    //implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Credential Manager
+    implementation(libs.androidx.credentials)
+    // Библиотека для интеграции Google Identity через Credential Manager
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     implementation(libs.coil.compose)
     // Зависимости для Google Sign-In
-    implementation(libs.play.services.auth) // Проверьте актуальную версию
+    implementation(libs.play.services.auth)
     // Jetpack Compose зависимости
     implementation (libs.ui)
     implementation (libs.material3)
@@ -81,9 +87,10 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.firebase.auth.ktx)
-    implementation(libs.androidx.work.testing)
+    //implementation(libs.androidx.work.testing)
     implementation(libs.core.ktx)
     implementation(libs.junit.junit)
+    implementation(libs.googleid)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.whitedobby"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -91,6 +91,8 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.junit.junit)
     implementation(libs.googleid)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.work.testing)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

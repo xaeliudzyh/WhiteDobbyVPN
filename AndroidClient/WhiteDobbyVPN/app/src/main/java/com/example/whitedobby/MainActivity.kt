@@ -1,9 +1,9 @@
 package com.example.whitedobby
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -37,6 +37,28 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import kotlinx.coroutines.launch
+import androidx.work.*
+import java.util.concurrent.TimeUnit
+
+fun scheduleUserActivityWorker(userId: String) {
+    val request = PeriodicWorkRequestBuilder<UserActivityWorker>(15, TimeUnit.MINUTES)
+        .setInputData(workDataOf("USER_ID" to userId))
+        .build()
+
+    WorkManager.getInstance()
+        .enqueueUniquePeriodicWork(
+            "userActivityWorker",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+}
+
+fun scheduleOneTimeWorker(userId: String) {
+    val request = OneTimeWorkRequestBuilder<UserActivityWorker>()
+        .setInputData(workDataOf("USER_ID" to userId))
+        .build()
+    WorkManager.getInstance().enqueue(request)
+}
 
 data class UserData(
     val name: String? = null,
@@ -46,11 +68,10 @@ data class UserData(
 
 class MainActivity : ComponentActivity() {
 
-    // Firebase: Firestore and Auth (Storage removed)
     private lateinit var firestore: FirebaseFirestore
     private lateinit var auth: FirebaseAuth
 
-    // Our Credential Manager wrapper
+    // Credential Manager wrapper
     private val googleAuthUiService by lazy {
         GoogleAuthUiService(
             context = applicationContext,
@@ -60,29 +81,22 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var authStateListener: FirebaseAuth.AuthStateListener
 
+    @SuppressLint("CoroutineCreationDuringComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Initialize Firebase Auth
+        // Initialize FirebaseAuth
         auth = FirebaseAuth.getInstance()
 
         // Initialize Firestore
         firestore = FirebaseFirestore.getInstance()
 
-        // Enable Firestore local cache
-        val settings = FirebaseFirestoreSettings.Builder()
-            .setPersistenceEnabled(true)
-            .build()
-        firestore.firestoreSettings = settings
-
-        // We still create notification channels and handle permissions
         createNotificationChannels()
         requestNotificationPermission()
 
         setContent {
             WhiteDobbyVPNTheme {
-                // Make the entire background Light Gray
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.LightGray
@@ -107,27 +121,29 @@ class MainActivity : ComponentActivity() {
                                 lifecycleScope.launch {
                                     googleAuthUiService.signIn()
                                     googleAuthUiService.getSignedInUser()?.let { user ->
-                                        saveUserData(user) // Save/update user info in Firestore
+                                        saveUserData(user)
                                     }
                                 }
                             }
                         )
                     } else {
-                        // If user is logged in, build our navigation
+                        currentUserState?.let { user ->
+                            scheduleOneTimeWorker(user.uid)
+                            scheduleUserActivityWorker(user.uid)
+                        }
+
                         val navController = rememberNavController()
 
                         NavHost(
                             navController = navController,
-                            startDestination = "home" // Home screen
+                            startDestination = "home"
                         ) {
-                            // Home screen
                             composable("home") {
                                 HomeScreen(
                                     onGoToAccount = { navController.navigate("account") },
                                     onGoToSettings = { navController.navigate("settings") }
                                 )
                             }
-                            // Account screen
                             composable("account") {
                                 AccountScreen(
                                     firestore = firestore,
@@ -138,7 +154,6 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() }
                                 )
                             }
-                            // Settings screen
                             composable("settings") {
                                 SettingsScreen(
                                     onBack = { navController.popBackStack() }
@@ -157,9 +172,7 @@ class MainActivity : ComponentActivity() {
             "name" to user.displayName,
             "email" to user.email,
             "lastLogin" to FieldValue.serverTimestamp()
-            // profilePictureUrl
         )
-
         firestore.collection("users")
             .document(userId)
             .set(userData)
@@ -171,6 +184,9 @@ class MainActivity : ComponentActivity() {
             }
     }
 
+    /**
+     * Выход из FirebaseAuth + очистка Credential Manager
+     */
     private fun signOut(navController: NavHostController) {
         lifecycleScope.launch {
             googleAuthUiService.signOut()
@@ -180,16 +196,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Уведомления + разрешение
+     */
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                // Permission already granted
+                // already granted
             } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-                // If we want to explain why notifications are needed
+                // explain
             } else {
-                // Request permission
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
@@ -207,6 +225,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Создаём каналы уведомлений
+     */
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel1 = NotificationChannel(
@@ -224,14 +245,16 @@ class MainActivity : ComponentActivity() {
                 description = "For ordinary notifications."
             }
 
-            val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel1)
             notificationManager.createNotificationChannel(channel2)
         }
     }
 }
 
+/**
+ * Экран входа, только для неавторизованного пользователя
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignInScreen(onSignIn: () -> Unit) {
@@ -245,12 +268,15 @@ fun SignInScreen(onSignIn: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Button(onClick = onSignIn) {
-                Text(text = "Sign in")
+                Text("Sign in")
             }
         }
     }
 }
 
+/**
+ * Home screen
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -284,7 +310,6 @@ fun HomeScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            // ~1/3 height
             Spacer(modifier = Modifier.weight(1f))
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -294,8 +319,6 @@ fun HomeScreen(
                     Text("Connect")
                 }
             }
-
-            // Dropdown list of countries
             Spacer(modifier = Modifier.height(16.dp))
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -303,13 +326,14 @@ fun HomeScreen(
             ) {
                 CountryDropdown()
             }
-
-            // Fill the remaining space
             Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
 
+/**
+ * Выбор стран (демо)
+ */
 @Composable
 fun CountryDropdown() {
     val countries = listOf("USA", "Canada", "Germany", "France", "Japan", "South Ossetia")
@@ -320,7 +344,7 @@ fun CountryDropdown() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Button(onClick = { expanded = !expanded }) {
-            Text(text = "Country: $selectedCountry")
+            Text("Country: $selectedCountry")
         }
         DropdownMenu(
             expanded = expanded,
@@ -339,6 +363,9 @@ fun CountryDropdown() {
     }
 }
 
+/**
+ * Settings screen
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -362,24 +389,21 @@ fun SettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.Start
+                .padding(16.dp)
         ) {
-            Text(text = "VPN Settings", style = MaterialTheme.typography.titleLarge)
+            Text("VPN Settings", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Clickable sections(potom eshe dobavlyu)
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
                     .clickable {
-                        // TODO: Key History logic
+                        // TODO: Key History
                     }
             ) {
-                Box(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Key History")
+                Box(Modifier.padding(16.dp)) {
+                    Text("Key History")
                 }
             }
 
@@ -388,17 +412,20 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
                     .clickable {
-                        // TODO: Traffic Info logic
+                        // TODO: Traffic Info
                     }
             ) {
-                Box(modifier = Modifier.padding(16.dp)) {
-                    Text(text = "Traffic Info")
+                Box(Modifier.padding(16.dp)) {
+                    Text("Traffic Info")
                 }
             }
         }
     }
 }
 
+/**
+ * Account screen: показывает имя, email, кнопку Sign Out
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountScreen(
@@ -410,7 +437,7 @@ fun AccountScreen(
     val userId = currentUser.uid
     var userData by remember { mutableStateOf<UserData?>(null) }
 
-    // Load user data from Firestore
+    // Загружаем userData из Firestore
     LaunchedEffect(userId) {
         val docRef = firestore.collection("users").document(userId)
         docRef.addSnapshotListener { snapshot, error ->
@@ -453,12 +480,12 @@ fun AccountScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(text = "Name: ${userData!!.name}")
-                    Text(text = "Email: ${userData!!.email}")
+                    Text("Name: ${userData!!.name}")
+                    Text("Email: ${userData!!.email}")
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(Modifier.height(24.dp))
                     Button(onClick = onSignOut) {
-                        Text("Sign Out")
+                        Text("Sign Out!")
                     }
                 }
             }

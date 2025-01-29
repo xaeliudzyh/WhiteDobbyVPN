@@ -1,6 +1,7 @@
 package com.example.whitedobby
 
 import android.content.Context
+import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -24,8 +25,6 @@ class GoogleAuthUiService(
     suspend fun signIn() {
         val getGoogleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
-            // ВАЖНО: замените R.string.default_web_client_id на тот же,
-            // что использовали для Firebase - это ваш serverClientId
             .setServerClientId(context.getString(R.string.default_web_client_id))
             .build()
 
@@ -45,15 +44,11 @@ class GoogleAuthUiService(
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             auth.signInWithCredential(firebaseCredential).await()
         } catch (e: Exception) {
-            e.printStackTrace()
-            // Не забывайте обрабатывать CancellationException
+            Log.e(GoogleAuthUiService::class.java.simpleName, "Google sign-in failed", e)
             if (e is CancellationException) throw e
         }
     }
 
-    /**
-     * Выход из Firebase + очистка Credential Manager.
-     */
     suspend fun signOut() {
         try {
             credentialManager.clearCredentialState(ClearCredentialStateRequest())
@@ -64,8 +59,5 @@ class GoogleAuthUiService(
         }
     }
 
-    /**
-     * Текущий пользователь (FirebaseUser), если он авторизован.
-     */
     fun getSignedInUser() = auth.currentUser
 }
